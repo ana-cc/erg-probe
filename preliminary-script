@@ -1,0 +1,8 @@
+apt install ansible
+ansible-galaxy install systemli.onion
+su - root
+adduser ergadmin sudo
+visudo:
+ergadmin        ALL = (ALL) NOPASSWD: ALL
+# after include /etc/sudoers.d
+mkfs.ext4 /dev/sda
