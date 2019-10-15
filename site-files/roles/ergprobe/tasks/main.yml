@@ -1,0 +1,140 @@
+---
+
+- name: update the apt package index i.e. apt-get update
+  apt: update_cache=yes
+  become: yes
+
+- name: upgrade system packages i.e. apt-get upgrade
+  apt: upgrade=dist
+  become: yes
+
+- name: install vim, git and rsync
+  apt:
+    name: vim,git,rsync
+    update_cache: yes
+  become: yes
+    
+- name: Ensures SSD is mounted
+  mount:
+    path: /mnt
+    src: /dev/sda1
+    fstype: ext4
+    opts: rw,noauto
+    state: present
+  become: yes
+    
+- name: Creates scripts directory
+  file:
+    owner: ergadmin
+    group: ergadmin
+    path: /home/ergadmin/scripts
+    state: directory
+  become: yes
+  become_user: ergadmin
+
+- name: Generate keys
+  user:
+    name: ergadmin
+    generate_ssh_key: yes
+    ssh_key_bits: 4096
+    ssh_key_file: "/home/ergadmin/.ssh/id_rsa"
+  become: yes
+  become_user: ergadmin
+
+- name: copy key to authorized_keys
+  shell: "ssh ergadmin@erg-controller.erg.abdn.ac.uk 'mkdir -p .ssh && cat >> .ssh/authorized_keys' < ~/.ssh/id_rsa.pub"
+  become: yes
+  become_user: ergadmin
+  
+- name: cp script
+  copy:
+    src: register.sh 
+    dest: /home/ergadmin/scripts/register.sh
+    owner: ergadmin
+    group: ergadmin
+    mode: 0777
+  become: yes
+  
+- name: run registration script
+  shell: "/home/ergadmin/scripts/register.sh | tee /home/ergadmin/$HOSTNAME"
+  args:
+    executable: /bin/bash
+  become: yes
+
+- name: copies results of latest resigter script to erg
+  shell: "scp /home/ergadmin/$HOSTNAME ergadmin@erg-controller.erg.abdn.ac.uk:registered/"
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: ergadmin
+
+- name: Set up tom as an admin
+  authorized_key:
+    user: ergadmin
+    state: present
+    key: "{{ lookup('file', 'public_keys/tom-pub.rsa') }}"
+  become: yes
+  become_user: ergadmin
+
+- name: Set up ana as an admin
+  authorized_key:
+    user: ergadmin
+    state: present
+    key: "{{ lookup('file', 'public_keys/ana-pub.rsa') }}"
+  become: yes
+  become_user: ergadmin
+
+- name: set the vimrc
+  copy:
+    src: vimrc 
+    dest: /home/ergadmin/.vimrc
+    owner: ergadmin
+    group: ergadmin
+    mode: 0700
+  become: yes
+  become_user: ergadmin
+
+- name: Disallow password authentication
+  lineinfile: dest=/etc/ssh/sshd_config
+               regexp="^PasswordAuthentication"
+               line="PasswordAuthentication no"
+               state=present
+  notify: restart sshd
+  become: yes
+
+- name: Creates results directory
+  file:
+    owner: ergadmin
+    group: ergadmin
+    path: /mnt/results
+    state: directory
+  become: yes
+
+- name: Creates host results directory
+  shell: "mkdir -p /mnt/results/$HOSTNAME"
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: ergadmin
+
+- name: rsync results directory to erg
+  command: rsync -avz /mnt/results/ erg-controller.erg.abdn.ac.uk:results
+  become: yes
+  become_user: ergadmin
+
+- name: copy the local playbook
+  copy:
+    src: local_playbook.yaml 
+    dest: /home/ergadmin/playbook.yaml
+    owner: ergadmin
+    group: ergadmin
+    mode: 0700
+  become: yes
+  become_user: ergadmin
+
+- name: make playbook run at reboot
+  cron:
+    name: Run playbook at reboot
+    special_time: reboot
+    job: ansible-playbook /home/ergadmin/playbook.yaml
+  become: yes

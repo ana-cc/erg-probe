@@ -1,5 +1,5 @@
-apt install ansible
-ansible-galaxy install systemli.onion
+#apt install ansible
+#ansible-galaxy install systemli.onion
 su - root
 adduser ergadmin sudo
 visudo:

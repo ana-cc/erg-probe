@@ -1,0 +1,11 @@
+---
+- name: Probe Setup
+  hosts: probes
+  become: yes
+  remote_user: ergadmin
+  become_method: sudo
+  roles:
+    - { role: systemli.onion }
+    - ergprobe
+
+
